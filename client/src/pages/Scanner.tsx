@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Scan } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -17,11 +17,14 @@ export default function Scanner() {
     remaining?: number;
     chainExhausted?: boolean;
   } | null>(null);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
   const scanMutation = trpc.qr.scan.useMutation({
     onSuccess: (data) => {
       setScanResult(data);
       toast.success(data.message);
+      setShowSuccessAnimation(true);
+      setTimeout(() => setShowSuccessAnimation(false), 1000);
       // Clear form
       setHashValue("");
     },
@@ -153,7 +156,11 @@ export default function Scanner() {
 
           {/* Scan Result */}
           {scanResult && (
-            <Card className={scanResult.success ? "border-green-200 dark:border-green-800" : "border-red-200 dark:border-red-800"}>
+            <Card className={`transition-all duration-500 ${
+              scanResult.success 
+                ? "border-green-200 dark:border-green-800" + (showSuccessAnimation ? " scale-105 shadow-2xl shadow-green-500/20" : "")
+                : "border-red-200 dark:border-red-800"
+            }`}>
               <CardHeader>
                 <CardTitle className={`flex items-center gap-2 ${scanResult.success ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                   {scanResult.success ? (

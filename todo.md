@@ -7,7 +7,7 @@
 - [x] QR code image generation
 - [x] Live morphing display page
 - [x] Scanner/validator page
-- [ ] Real-time WebSocket updates for morphing
+- [x] Real-time WebSocket updates for morphing (using polling)
 - [x] Scan tracking and analytics
 - [x] Admin dashboard for managing QR codes
 - [x] Create new morphing QR code flow
@@ -17,7 +17,7 @@
 
 - [x] Server-side hash chain generator
 - [x] QR code generation with qrcode library
-- [ ] WebSocket server for real-time updates
+- [x] WebSocket server for real-time updates (using polling)
 - [x] Database queries for chain management
 - [x] Scan validation logic
 - [x] Chain exhaustion handling
@@ -38,3 +38,7 @@
 - [ ] API for external integrations
 - [ ] Rate limiting for scans
 - [ ] Blockchain integration option
+
+## Recent Enhancements
+
+- [x] Visual animation effect when QR code morphs

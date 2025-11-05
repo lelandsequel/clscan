@@ -2,13 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 
 export default function Display() {
   const [, setLocation] = useLocation();
   const [chainId, setChainId] = useState<number | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [isMorphing, setIsMorphing] = useState(false);
+  const prevHashRef = useRef<string | null>(null);
 
   // Get chain ID from URL query params
   useEffect(() => {
@@ -27,6 +29,17 @@ export default function Display() {
       refetchInterval: autoRefresh ? 2000 : false, // Auto-refresh every 2 seconds
     }
   );
+
+  // Detect when QR code changes and trigger animation
+  useEffect(() => {
+    if (data?.hashValue && prevHashRef.current && prevHashRef.current !== data.hashValue) {
+      setIsMorphing(true);
+      setTimeout(() => setIsMorphing(false), 800);
+    }
+    if (data?.hashValue) {
+      prevHashRef.current = data.hashValue;
+    }
+  }, [data?.hashValue]);
 
   if (!chainId) {
     return (
@@ -147,18 +160,32 @@ export default function Display() {
             <CardContent className="flex flex-col items-center space-y-6">
               {/* QR Code */}
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl blur-xl opacity-20 animate-pulse" />
-                <div className="relative bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl">
+                <div className={`absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl blur-xl transition-opacity duration-500 ${
+                  isMorphing ? "opacity-60 animate-pulse" : "opacity-20"
+                }`} />
+                <div className={`relative bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl transition-all duration-500 ${
+                  isMorphing ? "scale-105 rotate-2" : "scale-100 rotate-0"
+                }`}>
                   <img
                     src={data?.qrCode}
                     alt="Morphing QR Code"
-                    className="w-80 h-80 md:w-96 md:h-96"
+                    className={`w-80 h-80 md:w-96 md:h-96 transition-all duration-500 ${
+                      isMorphing ? "opacity-0 scale-90" : "opacity-100 scale-100"
+                    }`}
+                    key={data?.hashValue}
                   />
                   {/* Live indicator */}
-                  <div className="absolute top-2 right-2 flex items-center gap-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                  <div className={`absolute top-2 right-2 flex items-center gap-2 text-white px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 ${
+                    isMorphing ? "bg-purple-500 scale-110" : "bg-green-500 scale-100"
+                  }`}>
                     <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                    LIVE
+                    {isMorphing ? "MORPHING" : "LIVE"}
                   </div>
+                  
+                  {/* Morphing overlay effect */}
+                  {isMorphing && (
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl animate-pulse" />
+                  )}
                 </div>
               </div>
 

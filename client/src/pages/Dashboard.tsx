@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { AlertCircle, BarChart3, CheckCircle2, ExternalLink, Loader2, LogOut, Plus, QrCode, Scan, XCircle } from "lucide-react";
+import { AlertCircle, BarChart3, CheckCircle2, ExternalLink, Loader2, LogOut, Plus, QrCode, Scan, Share2, XCircle } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -281,19 +281,34 @@ export default function Dashboard() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex gap-2 pt-2">
-                        <Link href={`/display?chain=${chain.id}`}>
-                          <Button variant="default" size="sm" className="flex-1 gap-1">
-                            <QrCode className="w-3 h-3" />
-                            Display
-                          </Button>
-                        </Link>
-                        <Link href={`/stats?chain=${chain.id}`}>
-                          <Button variant="outline" size="sm" className="flex-1 gap-1">
-                            <BarChart3 className="w-3 h-3" />
-                            Stats
-                          </Button>
-                        </Link>
+                      <div className="space-y-2 pt-2">
+                        <div className="flex gap-2">
+                          <Link href={`/display?chain=${chain.id}`}>
+                            <Button variant="default" size="sm" className="flex-1 gap-1">
+                              <QrCode className="w-3 h-3" />
+                              Display
+                            </Button>
+                          </Link>
+                          <Link href={`/stats?chain=${chain.id}`}>
+                            <Button variant="outline" size="sm" className="flex-1 gap-1">
+                              <BarChart3 className="w-3 h-3" />
+                              Stats
+                            </Button>
+                          </Link>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full gap-1"
+                          onClick={() => {
+                            const url = `${window.location.origin}/display?chain=${chain.id}`;
+                            navigator.clipboard.writeText(url);
+                            toast.success("Display link copied!");
+                          }}
+                        >
+                          <Share2 className="w-3 h-3" />
+                          Copy Display Link
+                        </Button>
                       </div>
 
                       {chain.isActive && (

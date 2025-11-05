@@ -42,3 +42,4 @@
 ## Recent Enhancements
 
 - [x] Visual animation effect when QR code morphs
+- [x] Share button for QR codes with multiple sharing options

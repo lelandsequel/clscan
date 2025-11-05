@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, Link2, Loader2, RefreshCw, Share2 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
+import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 
 export default function Display() {
@@ -10,7 +11,9 @@ export default function Display() {
   const [chainId, setChainId] = useState<number | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [isMorphing, setIsMorphing] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const prevHashRef = useRef<string | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement>(null);
 
   // Get chain ID from URL query params
   useEffect(() => {
@@ -40,6 +43,64 @@ export default function Display() {
       prevHashRef.current = data.hashValue;
     }
   }, [data?.hashValue]);
+
+  // Close share menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(event.target as Node)) {
+        setShowShareMenu(false);
+      }
+    };
+
+    if (showShareMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showShareMenu]);
+
+  // Share functionality
+  const handleCopyLink = () => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url);
+    toast.success("Link copied to clipboard!");
+    setShowShareMenu(false);
+  };
+
+  const handleDownloadQR = () => {
+    if (!data?.qrCode) return;
+    
+    const link = document.createElement('a');
+    link.href = data.qrCode;
+    link.download = `morphing-qr-${data.chainName}-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("QR code downloaded!");
+    setShowShareMenu(false);
+  };
+
+  const handleNativeShare = async () => {
+    if (!navigator.share) {
+      toast.error("Sharing not supported on this device");
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: `Morphing QR Code - ${data?.chainName}`,
+        text: 'Check out this morphing QR code that changes after each scan!',
+        url: window.location.href,
+      });
+      setShowShareMenu(false);
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        toast.error("Failed to share");
+      }
+    }
+  };
 
   if (!chainId) {
     return (
@@ -111,15 +172,55 @@ export default function Display() {
             </Button>
           </Link>
           <div className="flex items-center gap-3">
-            <Button
-              variant={autoRefresh ? "default" : "outline"}
-              size="sm"
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className="gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`} />
-              {autoRefresh ? "Auto-Refresh On" : "Auto-Refresh Off"}
-            </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={autoRefresh ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  className="gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`} />
+                  {autoRefresh ? "Auto-Refresh On" : "Auto-Refresh Off"}
+                </Button>
+                <div className="relative" ref={shareMenuRef}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowShareMenu(!showShareMenu)}
+                    className="gap-2"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </Button>
+                  {showShareMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                      <button
+                        onClick={handleCopyLink}
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                      >
+                        <Link2 className="w-4 h-4" />
+                        Copy Link
+                      </button>
+                      <button
+                        onClick={handleDownloadQR}
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download QR Code
+                      </button>
+                      {typeof navigator !== 'undefined' && 'share' in navigator && (
+                        <button
+                          onClick={handleNativeShare}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          Share via...
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
           </div>
         </div>
       </header>

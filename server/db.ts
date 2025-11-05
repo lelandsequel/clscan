@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, qrChains, qrHashes, scans, InsertQrChain, InsertQrHash, InsertScan } from "../drizzle/schema";
+import { InsertUser, users, qrChains, qrHashes, scans, InsertQrChain, InsertQrHash, InsertScan, organizations, organizationMembers, InsertOrganization, InsertOrganizationMember } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -202,4 +202,170 @@ export async function getChainStats(chainId: number) {
     validScans: allScans.filter(s => s.isValid).length,
     invalidScans: allScans.filter(s => !s.isValid).length,
   };
+}
+
+// Organization Management
+
+export async function createOrganization(org: InsertOrganization) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(organizations).values(org);
+  return result[0].insertId;
+}
+
+export async function getOrganizationById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      logoUrl: organizations.logoUrl,
+      primaryColor: organizations.primaryColor,
+      secondaryColor: organizations.secondaryColor,
+      customDomain: organizations.customDomain,
+      plan: organizations.plan,
+      isActive: organizations.isActive,
+      createdAt: organizations.createdAt,
+    })
+    .from(organizations)
+    .where(eq(organizations.id, id))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getOrganizationBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(organizations).where(eq(organizations.slug, slug)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getUserOrganizations(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      logoUrl: organizations.logoUrl,
+      primaryColor: organizations.primaryColor,
+      secondaryColor: organizations.secondaryColor,
+      customDomain: organizations.customDomain,
+      plan: organizations.plan,
+      role: organizationMembers.role,
+      isActive: organizations.isActive,
+      createdAt: organizations.createdAt,
+    })
+    .from(organizationMembers)
+    .innerJoin(organizations, eq(organizationMembers.organizationId, organizations.id))
+    .where(eq(organizationMembers.userId, userId));
+
+  return result;
+}
+
+export async function getDefaultOrganization(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Get user's first organization (or create one if none exists)
+  const orgs = await getUserOrganizations(userId);
+  if (orgs.length > 0) {
+    return orgs[0];
+  }
+
+  return null;
+}
+
+export async function addOrganizationMember(member: InsertOrganizationMember) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(organizationMembers).values(member);
+}
+
+export async function getOrganizationMembers(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select({
+      id: organizationMembers.id,
+      userId: users.id,
+      userName: users.name,
+      userEmail: users.email,
+      role: organizationMembers.role,
+      createdAt: organizationMembers.createdAt,
+    })
+    .from(organizationMembers)
+    .innerJoin(users, eq(organizationMembers.userId, users.id))
+    .where(eq(organizationMembers.organizationId, organizationId));
+
+  return result;
+}
+
+export async function updateOrganization(id: number, updates: Partial<InsertOrganization>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(organizations).set(updates).where(eq(organizations.id, id));
+}
+
+export async function generateApiKey(): Promise<string> {
+  const crypto = await import('crypto');
+  return crypto.randomBytes(32).toString('hex');
+}
+
+export async function getOrganizationChains(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(qrChains)
+    .where(eq(qrChains.organizationId, organizationId))
+    .orderBy(desc(qrChains.createdAt));
+}
+
+export async function getOrganizationByApiKey(apiKey: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(organizations)
+    .where(eq(organizations.apiKey, apiKey))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getOrganizationByStripeCustomerId(stripeCustomerId: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(organizations)
+    .where(eq(organizations.stripeCustomerId, stripeCustomerId))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getOrganizationByIdFull(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
 }

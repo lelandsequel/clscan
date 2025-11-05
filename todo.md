@@ -43,3 +43,17 @@
 
 - [x] Visual animation effect when QR code morphs
 - [x] Share button for QR codes with multiple sharing options
+
+## Phase 1: Software Enhancement (MVP to Product)
+
+- [x] White-label branding system (custom logo, colors, domain)
+- [x] REST API for third-party integrations
+- [x] API authentication and rate limiting
+- [x] Webhook notifications for scan events
+- [x] Export scan data (CSV format)
+- [x] Export scan data (PDF reports)
+- [x] Multi-user organization accounts
+- [x] Role-based access control (admin, member, viewer)
+- [x] Payment integration with Stripe
+- [x] Subscription management
+- [x] API documentation page

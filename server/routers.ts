@@ -29,6 +29,28 @@ export const appRouter = router({
         chainLength: z.number().int().min(10).max(10000).default(100),
       }))
       .mutation(async ({ input, ctx }) => {
+        // Get or create default organization for user
+        let org = await db.getDefaultOrganization(ctx.user.id);
+        let organizationId: number;
+        
+        if (!org) {
+          // Create default organization for new user
+          organizationId = await db.createOrganization({
+            name: `${ctx.user.name || 'My'} Organization`,
+            slug: `org-${ctx.user.id}-${Date.now()}`,
+            ownerId: ctx.user.id,
+            plan: 'free',
+            isActive: true,
+          });
+          await db.addOrganizationMember({
+            organizationId,
+            userId: ctx.user.id,
+            role: 'owner',
+          });
+        } else {
+          organizationId = org.id;
+        }
+
         const seed = generateSeed();
         const hashes = generateHashChain(seed, input.chainLength);
 
@@ -41,6 +63,7 @@ export const appRouter = router({
           currentIndex: input.chainLength - 1, // Start at the end
           isActive: true,
           createdBy: ctx.user.id,
+          organizationId,
         });
 
         // Store all hashes
@@ -281,6 +304,153 @@ export const appRouter = router({
 
         await db.deactivateQrChain(input.chainId);
         return { success: true, message: "Chain deactivated" };
+      }),
+
+    // Export scan data as CSV
+    exportCSV: protectedProcedure
+      .input(z.object({ chainId: z.number().int() }))
+      .query(async ({ input, ctx }) => {
+        const chain = await db.getQrChainById(input.chainId);
+        if (!chain) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Chain not found" });
+        }
+
+        // Check ownership
+        if (chain.createdBy !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+        }
+
+        const { generateScanCSVString } = await import("./exportUtils");
+        const csvContent = await generateScanCSVString(input.chainId);
+        return { csvContent };
+      }),
+
+    // Export scan data as PDF
+    exportPDF: protectedProcedure
+      .input(z.object({ chainId: z.number().int() }))
+      .query(async ({ input, ctx }) => {
+        const chain = await db.getQrChainById(input.chainId);
+        if (!chain) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Chain not found" });
+        }
+
+        // Check ownership
+        if (chain.createdBy !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+        }
+
+        const { exportScansToPDF } = await import("./exportUtils");
+        const pdfBuffer = await exportScansToPDF(input.chainId);
+        const base64Pdf = pdfBuffer.toString('base64');
+        return { pdfData: base64Pdf };
+      }),
+  }),
+
+  // Organization Management
+  organization: router({
+    // Get current user's organizations
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const orgs = await db.getUserOrganizations(ctx.user.id);
+      return orgs;
+    }),
+
+    // Get organization details
+    get: protectedProcedure
+      .input(z.object({ organizationId: z.number().int() }))
+      .query(async ({ input, ctx }) => {
+        const org = await db.getOrganizationById(input.organizationId);
+        if (!org) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Organization not found" });
+        }
+        
+        // Check membership
+        const orgs = await db.getUserOrganizations(ctx.user.id);
+        const isMember = orgs.some(o => o.id === input.organizationId);
+        if (!isMember) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+        }
+
+        return org;
+      }),
+
+    // Update organization branding
+    updateBranding: protectedProcedure
+      .input(z.object({
+        organizationId: z.number().int(),
+        name: z.string().min(1).max(255).optional(),
+        logoUrl: z.string().url().optional(),
+        primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+        secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Check if user is admin/owner
+        const orgs = await db.getUserOrganizations(ctx.user.id);
+        const org = orgs.find(o => o.id === input.organizationId);
+        if (!org || (org.role !== 'owner' && org.role !== 'admin')) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+        }
+
+        const { organizationId, ...updates } = input;
+        await db.updateOrganization(organizationId, updates);
+        return { success: true, message: "Branding updated" };
+      }),
+
+    // Generate new API key
+    generateApiKey: protectedProcedure
+      .input(z.object({ organizationId: z.number().int() }))
+      .mutation(async ({ input, ctx }) => {
+        // Check if user is owner
+        const orgs = await db.getUserOrganizations(ctx.user.id);
+        const org = orgs.find(o => o.id === input.organizationId);
+        if (!org || org.role !== 'owner') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only owners can generate API keys" });
+        }
+
+        const apiKey = await db.generateApiKey();
+        await db.updateOrganization(input.organizationId, { apiKey });
+        return { apiKey };
+      }),
+
+    // Update webhook settings
+    updateWebhook: protectedProcedure
+      .input(z.object({
+        organizationId: z.number().int(),
+        webhookUrl: z.string().url().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Check if user is admin/owner
+        const orgs = await db.getUserOrganizations(ctx.user.id);
+        const org = orgs.find(o => o.id === input.organizationId);
+        if (!org || (org.role !== 'owner' && org.role !== 'admin')) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+        }
+
+        const webhookSecret = input.webhookUrl ? await db.generateApiKey() : null;
+        await db.updateOrganization(input.organizationId, {
+          webhookUrl: input.webhookUrl || null,
+          webhookSecret,
+        });
+        
+        return { 
+          success: true, 
+          message: "Webhook updated",
+          webhookSecret 
+        };
+      }),
+
+    // Get organization members
+    getMembers: protectedProcedure
+      .input(z.object({ organizationId: z.number().int() }))
+      .query(async ({ input, ctx }) => {
+        // Check membership
+        const orgs = await db.getUserOrganizations(ctx.user.id);
+        const isMember = orgs.some(o => o.id === input.organizationId);
+        if (!isMember) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+        }
+
+        const members = await db.getOrganizationMembers(input.organizationId);
+        return members;
       }),
   }),
 });

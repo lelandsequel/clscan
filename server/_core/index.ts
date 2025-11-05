@@ -7,6 +7,8 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import apiRouter from "../apiRouter";
+import stripeRouter from "../stripeRouter";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -30,11 +32,20 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  
+  // Stripe webhook MUST be registered BEFORE express.json() for signature verification
+  app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeRouter);
+  
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Stripe payment routes (non-webhook)
+  app.use("/api/stripe", stripeRouter);
+  // REST API v1
+  app.use("/api/v1", apiRouter);
   // tRPC API
   app.use(
     "/api/trpc",
